@@ -43,6 +43,12 @@ fn finish_macos_update(result: hbb_common::ResultType<()>) -> Option<CoreMainAct
 /// If it returns [`Some`], the action determines whether to start the UI or report failure.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn core_main() -> Option<CoreMainAction> {
+    // Bind the client state to its QENEX seat before any state is touched, so that the
+    // configuration, data and storage roots resolve inside the seat workspace.
+    if let Err(err) = base::seat::apply() {
+        eprintln!("{err}");
+        return Some(CoreMainAction::ExitFailure(hbb_common::anyhow::anyhow!("{err}")));
+    }
     if !crate::common::global_init() {
         return None;
     }
@@ -151,7 +157,11 @@ pub fn core_main() -> Option<CoreMainAction> {
     }
     if args.len() > 0 {
         if args[0] == "--version" {
-            println!("{}", crate::VERSION);
+            // The seat identity is observable in the version output (R4).
+            match base::seat::info_line() {
+                Some(info) => println!("{} {}", crate::VERSION, info),
+                None => println!("{}", crate::VERSION),
+            }
             return None;
         } else if args[0] == "--build-date" {
             println!("{}", crate::BUILD_DATE);
